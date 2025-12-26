@@ -1,0 +1,23 @@
+How to Run the Slant Game
+=========================
+
+Prerequisites:
+- Java JDK installed (Java 8 or higher)
+- Terminal/Command Prompt available
+
+Steps:
+
+1. Open a terminal (Command Prompt or PowerShell) and navigate to the project root directory:
+   cd c:/Users/Saketh/OneDrive/Desktop/Slant
+
+2. Compile the Java source files:
+   javac -d out -sourcepath src/main/java src/main/java/slant/Main.java
+
+3. Run the application:
+   java -cp out slant.Main
+
+4. You should see a window titled "Slant Game" appear.
+
+Note:
+- The `out` directory will be created automatically by the compiler to store class files.
+- If you add more files, you might need to include them in the compilation command or simply re-run the command above as it points to the Main class and uses sourcepath.
