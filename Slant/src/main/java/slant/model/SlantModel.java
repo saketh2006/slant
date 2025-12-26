@@ -1,7 +1,5 @@
 package slant.model;
 
-
-
 public class SlantModel {
     private int width;
     private int height;
@@ -39,8 +37,8 @@ public class SlantModel {
         fillValidGrid();
 
         // Save solution
-        for(int y=0; y<height; y++) {
-            for(int x=0; x<width; x++) {
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
                 solutionGrid[y][x] = grid[y][x];
             }
         }
@@ -53,8 +51,8 @@ public class SlantModel {
     }
 
     public void solve() {
-        for(int y=0; y<height; y++) {
-            for(int x=0; x<width; x++) {
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
                 grid[y][x] = solutionGrid[y][x];
             }
         }
@@ -270,3 +268,4 @@ public class SlantModel {
         return parent[i] = find(parent, parent[i]); // Path compression
     }
 }
+// hello hi
