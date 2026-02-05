@@ -268,4 +268,4 @@ public class SlantModel {
         return parent[i] = find(parent, parent[i]); // Path compression
     }
 }
-// hello hi
+// hello hi hello
