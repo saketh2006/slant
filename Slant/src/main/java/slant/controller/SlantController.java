@@ -7,7 +7,6 @@ import slant.view.SlantPanel;
 
 import javax.swing.Timer;
 import java.awt.Point;
-import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 
@@ -15,22 +14,77 @@ public class SlantController {
     private SlantModel model;
     private SlantPanel view;
 
+    // --- TIMER & SCORING ---
+    private Timer gameTimer;
+    private int elapsedSeconds;
+    private boolean isTimerRunning;
+    private int score;
+
     public SlantController(SlantModel model) {
         this.model = model;
+        // Initialize Game Timer (ticks every 1 second)
+        gameTimer = new Timer(1000, e -> {
+            elapsedSeconds++;
+            if (view != null) {
+                view.updateStatus(); // Update view every second to show time
+            }
+        });
     }
 
     public void startNewGame(int width, int height) {
+        stopGameTimer();
+        elapsedSeconds = 0;
+        score = 0;
+        isTimerRunning = false;
         model.reset(width, height);
         if (view != null) {
             view.updateBoardSize();
             view.repaint();
+            view.updateStatus();
         }
     }
 
+    private void startGameTimer() {
+        if (!isTimerRunning) {
+            isTimerRunning = true;
+            gameTimer.start();
+        }
+    }
+
+    private void stopGameTimer() {
+        if (isTimerRunning) {
+            gameTimer.stop();
+            isTimerRunning = false;
+        }
+    }
+
+    public int getElapsedSeconds() {
+        return elapsedSeconds;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    private void calculateScore() {
+        int totalCells = model.getWidth() * model.getHeight();
+        // Formula: (Total Cells * 100) - Time Taken
+        // Minimum score 0
+        score = Math.max(0, (totalCells * 100) - elapsedSeconds);
+    }
+
+    // --- DIFFICULTY ---
+    public void setDifficulty(SlantModel.Difficulty difficulty) {
+        model.setDifficulty(difficulty);
+    }
+
+    // --- EXISTING METHODS ---
     public void solveGame() {
+        stopGameTimer(); // Solving forfeits the score/timer
         model.solve();
         if (view != null) {
             view.repaint();
+            view.updateStatus();
         }
     }
 
@@ -49,6 +103,11 @@ public class SlantController {
             return;
         }
 
+        // Start timer on first move
+        if (!isTimerRunning) {
+            startGameTimer();
+        }
+
         if (practiceMode) {
             model.setSlant(x, y, model.getSolutionAt(x, y));
         } else {
@@ -61,8 +120,11 @@ public class SlantController {
         }
 
         if (model.isSolved()) {
+            stopGameTimer();
+            calculateScore();
             showVictory(Player.HUMAN, "Puzzle Solved!");
         } else if (model.isGridFull()) {
+            stopGameTimer(); // Game over, stop timer
             String reason = "Grid full but incorrect.";
             if (model.hasLoops()) {
                 reason = "Grid full, but a LOOP exists!";
@@ -79,7 +141,7 @@ public class SlantController {
     }
 
     private void triggerCpuMove() {
-        Timer timer = new Timer(1000, e -> {
+        Timer cpuDelayTimer = new Timer(1000, e -> {
             try {
                 System.out.println("DEBUG: Entering CPU Move Logic...");
                 boolean moved = makeCpuMove();
@@ -90,8 +152,10 @@ public class SlantController {
                 }
 
                 if (model.isSolved()) {
+                    stopGameTimer(); // CPU won
                     showVictory(Player.CPU, "CPU completed the puzzle.");
                 } else if (model.isGridFull()) {
+                    stopGameTimer();
                     String reason = "Grid full but incorrect.";
                     if (model.hasLoops()) {
                         reason = "Grid full, but a LOOP exists!";
@@ -104,13 +168,13 @@ public class SlantController {
                     if (view != null)
                         view.updateStatus();
                 }
-            } catch (Exception ex) {
-                System.err.println("ERROR: Exception during CPU move!");
-                ex.printStackTrace();
+            } catch (Throwable t) {
+                System.err.println("CRITICAL ERROR: Uncaught Throwable during CPU move!");
+                t.printStackTrace();
             }
         });
-        timer.setRepeats(false);
-        timer.start();
+        cpuDelayTimer.setRepeats(false);
+        cpuDelayTimer.start();
     }
 
     // =========================
@@ -390,7 +454,7 @@ public class SlantController {
         if (view != null) {
             String title = (winner == Player.HUMAN) ? "Victory" : "Game Over";
             String msg = (winner == Player.HUMAN)
-                    ? "You Won! " + reason
+                    ? "You Won! " + reason + "\nFinal Score: " + score + " (Time: " + elapsedSeconds + "s)"
                     : "CPU Won! " + reason;
 
             javax.swing.JOptionPane.showMessageDialog(

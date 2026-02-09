@@ -90,14 +90,36 @@ public class SlantModel {
         }
     }
 
+    public enum Difficulty {
+        EASY(0.8),
+        MEDIUM(0.5),
+        HARD(0.3);
+
+        public final double probability;
+
+        Difficulty(double probability) {
+            this.probability = probability;
+        }
+    }
+
+    private Difficulty currentDifficulty = Difficulty.MEDIUM;
+
+    public void setDifficulty(Difficulty difficulty) {
+        this.currentDifficulty = difficulty;
+    }
+
+    public Difficulty getDifficulty() {
+        return currentDifficulty;
+    }
+
     private void generateClues() {
         for (int y = 0; y <= height; y++) {
             for (int x = 0; x <= width; x++) {
                 // Calculate actual number of lines
                 int count = countLinesAt(x, y);
 
-                // Randomly decide to show clue or not (e.g., 40% chance)
-                if (Math.random() < 0.4) {
+                // Randomly decide to show clue based on difficulty
+                if (Math.random() < currentDifficulty.probability) {
                     clues[y][x] = count;
                 } else {
                     clues[y][x] = null;
@@ -266,5 +288,49 @@ public class SlantModel {
         if (parent[i] == i)
             return i;
         return parent[i] = find(parent, parent[i]); // Path compression
+    }
+
+    // Divide and Conquer Integration
+
+    /**
+     * Retrieves all non-null clues from the board.
+     * 
+     * @return List of all clues present on the board.
+     */
+    private java.util.List<Integer> getAllClues() {
+        java.util.List<Integer> allClues = new java.util.ArrayList<>();
+        for (int y = 0; y <= height; y++) {
+            for (int x = 0; x <= width; x++) {
+                if (clues[y][x] != null) {
+                    allClues.add(clues[y][x]);
+                }
+            }
+        }
+        return allClues;
+    }
+
+    /**
+     * Uses Merge Sort (Divide and Conquer) to return a sorted list of clues.
+     * 
+     * @return Sorted list of clues.
+     */
+    public java.util.List<Integer> getCluesSortedByMergeSort() {
+        java.util.List<Integer> cluesList = getAllClues();
+        // Use the DivideAndConquer utility class
+        // Note: You might need to import or fully qualify
+        // slant.algorithm.DivideAndConquer
+        return slant.algorithm.DivideAndConquer.mergeSort(cluesList);
+    }
+
+    /**
+     * Uses Quick Sort (Divide and Conquer) to return a sorted list of clues.
+     * 
+     * @return Sorted list of clues.
+     */
+    public java.util.List<Integer> getCluesSortedByQuickSort() {
+        java.util.List<Integer> cluesList = getAllClues();
+        // Use the DivideAndConquer utility class
+        slant.algorithm.DivideAndConquer.quickSort(cluesList);
+        return cluesList;
     }
 }
