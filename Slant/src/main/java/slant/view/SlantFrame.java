@@ -32,7 +32,7 @@ public class SlantFrame extends JFrame {
         });
 
         javax.swing.JMenu sizeMenu = new javax.swing.JMenu("Size");
-        int[] sizes = { 4, 8};
+        int[] sizes = { 4, 8 };
         for (int s : sizes) {
             javax.swing.JMenuItem sizeItem = new javax.swing.JMenuItem(s + "x" + s);
             sizeItem.addActionListener(e -> {
@@ -47,27 +47,58 @@ public class SlantFrame extends JFrame {
         javax.swing.JMenuItem rulesItem = new javax.swing.JMenuItem("Rules");
         rulesItem.addActionListener(e -> {
             String rules = "Rules of Slant (Human vs CPU):\n\n" +
-                           "1. Objective: Fill the grid with diagonal lines (/ or \\) to match the clues.\n" +
-                           "2. Clues: Numbers show how many lines must touch that point (0-4).\n" +
-                           "3. No Loops: Lines must NEVER form a closed loop.\n" +
-                           "4. Gameplay: You and CPU take turns placing lines.\n" +
-                           "5. Winning: The player who places the LAST correct line wins!\n" +
-                           "6. Losing: If the grid fills up but has errors (loops or wrong clues), the last player loses (CPU wins).";
-            javax.swing.JOptionPane.showMessageDialog(this, rules, "Game Rules", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+                    "1. Objective: Fill the grid with diagonal lines (/ or \\) to match the clues.\n" +
+                    "2. Clues: Numbers show how many lines must touch that point (0-4).\n" +
+                    "3. No Loops: Lines must NEVER form a closed loop.\n" +
+                    "4. Gameplay: You and CPU take turns placing lines.\n" +
+                    "5. Winning: The player who places the LAST correct line wins!\n" +
+                    "6. Losing: If the grid fills up but has errors (loops or wrong clues), the last player loses (CPU wins).";
+            javax.swing.JOptionPane.showMessageDialog(this, rules, "Game Rules",
+                    javax.swing.JOptionPane.INFORMATION_MESSAGE);
         });
         helpMenu.add(rulesItem);
 
         gameMenu.add(newItem);
         gameMenu.add(solveItem);
-        
+
         javax.swing.JCheckBoxMenuItem practiceItem = new javax.swing.JCheckBoxMenuItem("Practice Mode (Auto-Correct)");
         practiceItem.addActionListener(e -> {
             controller.setPracticeMode(practiceItem.isSelected());
         });
         gameMenu.add(practiceItem);
-        
+
         gameMenu.add(sizeMenu);
+
+        // Difficulty Menu
+        javax.swing.JMenu difficultyMenu = new javax.swing.JMenu("Difficulty");
+
+        javax.swing.JMenuItem easyItem = new javax.swing.JMenuItem("Easy (High Clues)");
+        easyItem.addActionListener(e -> {
+            controller.setDifficulty(SlantModel.Difficulty.EASY);
+            controller.startNewGame(model.getWidth(), model.getHeight());
+            pack();
+        });
+
+        javax.swing.JMenuItem mediumItem = new javax.swing.JMenuItem("Medium (Balanced)");
+        mediumItem.addActionListener(e -> {
+            controller.setDifficulty(SlantModel.Difficulty.MEDIUM);
+            controller.startNewGame(model.getWidth(), model.getHeight());
+            pack();
+        });
+
+        javax.swing.JMenuItem hardItem = new javax.swing.JMenuItem("Hard (Few Clues)");
+        hardItem.addActionListener(e -> {
+            controller.setDifficulty(SlantModel.Difficulty.HARD);
+            controller.startNewGame(model.getWidth(), model.getHeight());
+            pack();
+        });
+
+        difficultyMenu.add(easyItem);
+        difficultyMenu.add(mediumItem);
+        difficultyMenu.add(hardItem);
+
         menuBar.add(gameMenu);
+        menuBar.add(difficultyMenu);
         menuBar.add(helpMenu);
         setJMenuBar(menuBar);
 
