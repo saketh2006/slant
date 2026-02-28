@@ -97,11 +97,10 @@ public class SlantPanel extends JPanel {
             int secs = time % 60;
             String timeStr = String.format("%02d:%02d", mins, secs);
             String diff = model.getDifficulty().toString();
-            int score = controller.getScore();
 
             String status = String.format(
-                    "  %s   |   Time: %s   |   Score: %d   |   %s",
-                    turn, timeStr, score, diff);
+                    "  %s   |   Time: %s   |   %s",
+                    turn, timeStr, diff);
             statusLabel.setText(status);
 
             Color accentColor = isHuman ? ACCENT_CYAN : ACCENT_YELLOW;
