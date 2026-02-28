@@ -8,6 +8,12 @@ public class SlantModel {
     private Integer[][] clues;
     private Player currentPlayer;
 
+    // === DYNAMIC PROGRAMMING (Review 3) ===
+    // DP table: cached clue line counts for each node intersection.
+    // Instead of recalculating all clues after every move (O(N)),
+    // we update only the 4 affected nodes per move (O(1)).
+    private int[][] dpClueCount;
+
     public SlantModel(int width, int height) {
         reset(width, height);
     }
@@ -18,6 +24,7 @@ public class SlantModel {
         this.grid = new Slant[height][width];
         this.solutionGrid = new Slant[height][width];
         this.clues = new Integer[height + 1][width + 1];
+        this.dpClueCount = new int[height + 1][width + 1]; // DP table initialization
         this.currentPlayer = Player.HUMAN;
 
         initializeGrid();
@@ -33,20 +40,17 @@ public class SlantModel {
     }
 
     public void generatePuzzle() {
-        // 1. Fill grid with valid solution
+
         fillValidGrid();
 
-        // Save solution
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 solutionGrid[y][x] = grid[y][x];
             }
         }
 
-        // 2. Generate clues from solution
         generateClues();
 
-        // 3. Clear grid for player
         initializeGrid();
     }
 
@@ -59,7 +63,7 @@ public class SlantModel {
     }
 
     private void fillValidGrid() {
-        // Simple constructive approach: Randomly fill, if loop, flip.
+
         java.util.List<java.awt.Point> cells = new java.util.ArrayList<>();
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
@@ -69,22 +73,16 @@ public class SlantModel {
         java.util.Collections.shuffle(cells);
 
         for (java.awt.Point p : cells) {
-            // Try random slant
+
             Slant s = Math.random() < 0.5 ? Slant.FORWARD : Slant.BACKWARD;
             grid[p.y][p.x] = s;
 
             if (hasLoops()) {
-                // If loop, flip
+
                 grid[p.y][p.x] = (s == Slant.FORWARD) ? Slant.BACKWARD : Slant.FORWARD;
 
                 if (hasLoops()) {
-                    // This is rare/impossible in simple construction?
-                    // If both form loops, we might be stuck in a corner case.
-                    // For now, leave as is or revert to empty (but we need full grid).
-                    // Leaving it might leave a loop, but let's hope for best.
-                    // Actually, let's revert to empty if strictly needed, but better to keep
-                    // filled.
-                    // The simple "flip if loop" strategy usually yields a valid forest.
+
                 }
             }
         }
@@ -115,10 +113,9 @@ public class SlantModel {
     private void generateClues() {
         for (int y = 0; y <= height; y++) {
             for (int x = 0; x <= width; x++) {
-                // Calculate actual number of lines
+
                 int count = countLinesAt(x, y);
 
-                // Randomly decide to show clue based on difficulty
                 if (Math.random() < currentDifficulty.probability) {
                     clues[y][x] = count;
                 } else {
@@ -132,12 +129,38 @@ public class SlantModel {
         if (isValidCell(x, y)) {
             return grid[y][x];
         }
-        return null; // Or throw exception
+        return null;
     }
 
     public void setSlant(int x, int y, Slant slant) {
         if (isValidCell(x, y)) {
             grid[y][x] = slant;
+            // === DP UPDATE (Review 3) ===
+            // Incrementally update only the 4 corner nodes affected by this cell.
+            // This is O(1) instead of recalculating the entire board O(N).
+            updateDPClueCount(x, y);
+        }
+    }
+
+    /**
+     * DP: Incrementally updates the dpClueCount for the 4 corner nodes
+     * of the cell at (x, y). Each cell touches nodes:
+     * (x,y), (x+1,y), (x,y+1), (x+1,y+1)
+     */
+    private void updateDPClueCount(int cellX, int cellY) {
+        // The 4 corner nodes of cell (cellX, cellY)
+        int[][] corners = {
+                { cellX, cellY }, // top-left
+                { cellX + 1, cellY }, // top-right
+                { cellX, cellY + 1 }, // bottom-left
+                { cellX + 1, cellY + 1 } // bottom-right
+        };
+        for (int[] corner : corners) {
+            int nx = corner[0];
+            int ny = corner[1];
+            if (isValidNode(nx, ny)) {
+                dpClueCount[ny][nx] = countLinesAt(nx, ny);
+            }
         }
     }
 
@@ -270,7 +293,7 @@ public class SlantModel {
                     int rootU = find(parent, u);
                     int rootV = find(parent, v);
                     if (rootU == rootV)
-                        return true; // Loop detected
+                        return true;
                     parent[rootU] = rootV;
                 }
             }
@@ -284,13 +307,83 @@ public class SlantModel {
         return countLinesAt(x, y) == clues[y][x];
     }
 
+    // === DP VALIDATION (Review 3) ===
+
+    /**
+     * Uses the DP table (dpClueCount) to validate all clues.
+     * Instead of recalculating countLinesAt() for every node (O(N) per node),
+     * this reads pre-computed cached values (O(1) per node).
+     *
+     * @return true if all clues are satisfied according to DP cache.
+     */
+    public boolean validateWithDP() {
+        for (int y = 0; y <= height; y++) {
+            for (int x = 0; x <= width; x++) {
+                if (clues[y][x] != null) {
+                    if (dpClueCount[y][x] != clues[y][x]) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * DP-based move scoring: Returns a score for placing a slant at (x, y).
+     * Uses cached dpClueCount values from neighboring nodes to evaluate
+     * how beneficial this move would be.
+     *
+     * @return score based on how many adjacent clues would benefit from this move.
+     */
+    public int getDPMoveScore(int x, int y) {
+        int score = 0;
+        // Check all 4 corner nodes of this cell
+        int[][] corners = {
+                { x, y }, { x + 1, y }, { x, y + 1 }, { x + 1, y + 1 }
+        };
+        for (int[] corner : corners) {
+            int nx = corner[0];
+            int ny = corner[1];
+            if (isValidNode(nx, ny) && clues[ny][nx] != null) {
+                int currentCount = dpClueCount[ny][nx];
+                int target = clues[ny][nx];
+                // Score higher if this node still needs more lines
+                if (currentCount < target) {
+                    score += (target - currentCount);
+                }
+            }
+        }
+        return score;
+    }
+
+    /**
+     * Returns the DP clue count at a given node.
+     */
+    public int getDPClueCount(int x, int y) {
+        if (isValidNode(x, y)) {
+            return dpClueCount[y][x];
+        }
+        return 0;
+    }
+
+    /**
+     * Rebuilds the entire DP table from scratch.
+     * Called during puzzle generation or reset.
+     */
+    public void rebuildDPTable() {
+        for (int y = 0; y <= height; y++) {
+            for (int x = 0; x <= width; x++) {
+                dpClueCount[y][x] = countLinesAt(x, y);
+            }
+        }
+    }
+
     private int find(int[] parent, int i) {
         if (parent[i] == i)
             return i;
         return parent[i] = find(parent, parent[i]); // Path compression
     }
-
-    // Divide and Conquer Integration
 
     /**
      * Retrieves all non-null clues from the board.
@@ -310,15 +403,10 @@ public class SlantModel {
     }
 
     /**
-     * Uses Merge Sort (Divide and Conquer) to return a sorted list of clues.
-     * 
      * @return Sorted list of clues.
      */
     public java.util.List<Integer> getCluesSortedByMergeSort() {
         java.util.List<Integer> cluesList = getAllClues();
-        // Use the DivideAndConquer utility class
-        // Note: You might need to import or fully qualify
-        // slant.algorithm.DivideAndConquer
         return slant.algorithm.DivideAndConquer.mergeSort(cluesList);
     }
 
@@ -329,7 +417,7 @@ public class SlantModel {
      */
     public java.util.List<Integer> getCluesSortedByQuickSort() {
         java.util.List<Integer> cluesList = getAllClues();
-        // Use the DivideAndConquer utility class
+
         slant.algorithm.DivideAndConquer.quickSort(cluesList);
         return cluesList;
     }

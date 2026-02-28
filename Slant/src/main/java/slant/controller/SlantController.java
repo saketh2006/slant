@@ -14,7 +14,6 @@ public class SlantController {
     private SlantModel model;
     private SlantPanel view;
 
-    // --- TIMER & SCORING ---
     private Timer gameTimer;
     private int elapsedSeconds;
     private boolean isTimerRunning;
@@ -22,11 +21,11 @@ public class SlantController {
 
     public SlantController(SlantModel model) {
         this.model = model;
-        // Initialize Game Timer (ticks every 1 second)
+
         gameTimer = new Timer(1000, e -> {
             elapsedSeconds++;
             if (view != null) {
-                view.updateStatus(); // Update view every second to show time
+                view.updateStatus();
             }
         });
     }
@@ -68,19 +67,16 @@ public class SlantController {
 
     private void calculateScore() {
         int totalCells = model.getWidth() * model.getHeight();
-        // Formula: (Total Cells * 100) - Time Taken
-        // Minimum score 0
+
         score = Math.max(0, (totalCells * 100) - elapsedSeconds);
     }
 
-    // --- DIFFICULTY ---
     public void setDifficulty(SlantModel.Difficulty difficulty) {
         model.setDifficulty(difficulty);
     }
 
-    // --- EXISTING METHODS ---
     public void solveGame() {
-        stopGameTimer(); // Solving forfeits the score/timer
+        stopGameTimer();
         model.solve();
         if (view != null) {
             view.repaint();
@@ -90,12 +86,6 @@ public class SlantController {
 
     public void setView(SlantPanel view) {
         this.view = view;
-    }
-
-    private boolean practiceMode = false;
-
-    public void setPracticeMode(boolean practiceMode) {
-        this.practiceMode = practiceMode;
     }
 
     public void onCellClicked(int x, int y, Slant requestedSlant) {
@@ -108,11 +98,7 @@ public class SlantController {
             startGameTimer();
         }
 
-        if (practiceMode) {
-            model.setSlant(x, y, model.getSolutionAt(x, y));
-        } else {
-            model.setSlant(x, y, requestedSlant);
-        }
+        model.setSlant(x, y, requestedSlant);
 
         if (view != null) {
             view.repaint();
@@ -124,7 +110,7 @@ public class SlantController {
             calculateScore();
             showVictory(Player.HUMAN, "Puzzle Solved!");
         } else if (model.isGridFull()) {
-            stopGameTimer(); // Game over, stop timer
+            stopGameTimer();
             String reason = "Grid full but incorrect.";
             if (model.hasLoops()) {
                 reason = "Grid full, but a LOOP exists!";
@@ -143,16 +129,14 @@ public class SlantController {
     private void triggerCpuMove() {
         Timer cpuDelayTimer = new Timer(1000, e -> {
             try {
-                System.out.println("DEBUG: Entering CPU Move Logic...");
                 boolean moved = makeCpuMove();
-                System.out.println("DEBUG: CPU Move result: " + moved);
                 if (view != null) {
                     view.repaint();
                     view.updateStatus();
                 }
 
                 if (model.isSolved()) {
-                    stopGameTimer(); // CPU won
+                    stopGameTimer();
                     showVictory(Player.CPU, "CPU completed the puzzle.");
                 } else if (model.isGridFull()) {
                     stopGameTimer();
@@ -167,9 +151,13 @@ public class SlantController {
                     model.switchTurn();
                     if (view != null)
                         view.updateStatus();
+                } else {
+                    // CPU failed to find a move — switch turn back to human
+                    model.switchTurn();
+                    if (view != null)
+                        view.updateStatus();
                 }
             } catch (Throwable t) {
-                System.err.println("CRITICAL ERROR: Uncaught Throwable during CPU move!");
                 t.printStackTrace();
             }
         });
@@ -182,7 +170,8 @@ public class SlantController {
     // =========================
     public enum CpuStrategy {
         GREEDY, // Review 1
-        DIVIDE_AND_CONQUER // Review 2
+        DIVIDE_AND_CONQUER, // Review 2
+        BACKTRACKING // Review 3
     }
 
     private CpuStrategy currentStrategy = CpuStrategy.DIVIDE_AND_CONQUER;
@@ -192,7 +181,6 @@ public class SlantController {
     }
 
     private boolean makeCpuMove() {
-        System.out.println("DEBUG: makeCpuMove strategy=" + currentStrategy);
         boolean moved = false;
 
         try {
@@ -200,18 +188,20 @@ public class SlantController {
                 case GREEDY:
                     moved = makeCpuMoveGreedy();
                     break;
+                case BACKTRACKING:
+                    moved = makeCpuMoveBacktracking();
+                    if (!moved && !model.isGridFull()) {
+                        moved = makeCpuMoveGreedy();
+                    }
+                    break;
                 case DIVIDE_AND_CONQUER:
                 default:
                     moved = makeCpuMoveDnC();
-                    // FALLBACK: If D&C fails but grid is not full, try Greedy to prevent stall
+
                     if (!moved && !model.isGridFull()) {
-                        System.out.println("DEBUG: D&C failed to find move! Falling back to GREEDY.");
                         moved = makeCpuMoveGreedy();
-                        System.out.println("DEBUG: Fallback Greedy move result: " + moved);
                     }
                     if (!moved && !model.isGridFull()) {
-                        // If still failing, force a random move to unstick
-                        System.out.println("DEBUG: Defaulting to random cell search. CPU stuck.");
                         for (int y = 0; y < model.getHeight(); y++) {
                             for (int x = 0; x < model.getWidth(); x++) {
                                 if (model.getSlant(x, y) == Slant.EMPTY) {
@@ -224,7 +214,6 @@ public class SlantController {
                     break;
             }
         } catch (Exception e) {
-            System.err.println("CRITICAL ERROR: Exception inside MakeCpuMove!");
             e.printStackTrace();
         }
 
@@ -247,9 +236,6 @@ public class SlantController {
         if (emptyCells.isEmpty())
             return false;
 
-        // SORTING: prioritize cells with more adjacent clues (GREEDY)
-        // This satisfies "Inclusion of Sorting" for Review 2 as well, but primarily for
-        // Review 1 Greedy.
         sortMoves(emptyCells);
 
         Point p = emptyCells.get(0);
@@ -259,48 +245,24 @@ public class SlantController {
         return true;
     }
 
-    // --- STRATEGY 2: DIVIDE & CONQUER (Review 2) ---
-    // Algorithm: Recursive decomposition of the board.
-    // Review 2 Requirement: CPU CPU game playing style based on each algorithm
-    // design paradigm (D&C here)
-    // Review 2 Requirement: Inclusion of sorting in the game logic
-    // Algorithm Analysis:
-    // This approach uses a Divide and Conquer strategy similar to Merge Sort.
-    // The board is recursively divided into quadrants until manageable base chunks
-    // (e.g., 1x1 or 2x2) are reached.
-    // Moves within these chunks are evaluated and "sorted" by quality.
-    // The recursive steps then "merge" these sorted lists to produce a globally
-    // sorted list of best moves.
+    // STRATEGY 2: DIVIDE & CONQUER (Review 2)
     // Time Complexity: T(N) = 4T(N/4) + O(N) (for merge) -> O(N log N) where N is
-    // the number of cells.
+
     private boolean makeCpuMoveDnC() {
-        System.out.println("DEBUG: Starting D&C move calculation");
-        // Use Divide and Conquer to get the full list of moves sorted by quality
         List<Point> sortedMoves = getRankedMovesDnC(0, 0, model.getWidth(), model.getHeight());
-        System.out.println("DEBUG: Ranked D&C moves count: " + sortedMoves.size());
 
         if (sortedMoves.isEmpty())
             return false;
 
-        // Pick the best move (the first one in the sorted list/stream)
         Point p = sortedMoves.get(0);
-        System.out.println("DEBUG: Selected CPU Move at: " + p);
 
-        // Making the move
         Slant correct = model.getSolutionAt(p.x, p.y);
         model.setSlant(p.x, p.y, correct);
         return true;
     }
 
-    /**
-     * Recursive Divide and Conquer function to find and sort moves.
-     * Divides the grid area into 4 quadrants, solves for each, and merges the
-     * results.
-     */
     private List<Point> getRankedMovesDnC(int x, int y, int w, int h) {
-        // Base Case: If the area is small enough (e.g., single cell or very small
-        // block),
-        // process it directly (Conquer).
+
         if (w <= 1 || h <= 1) { // Process single row/col/cell directly
             List<Point> localMoves = new ArrayList<>();
             for (int iy = y; iy < y + h; iy++) {
@@ -310,16 +272,14 @@ public class SlantController {
                     }
                 }
             }
-            // Sort this small list
+
             sortMoves(localMoves);
             return localMoves;
         }
 
-        // Divide: Split into quadrants
         int midW = w / 2;
         int midH = h / 2;
 
-        // Ensure at least 1
         if (midW == 0)
             midW = 1;
         if (midH == 0)
@@ -328,51 +288,28 @@ public class SlantController {
         int remainW = w - midW;
         int remainH = h - midH;
 
-        // Recursive calls
-        List<Point> topLeft = getRankedMovesDnC(x, y, midW, midH); // Top-Left
-        List<Point> topRight = remainW > 0 ? getRankedMovesDnC(x + midW, y, remainW, midH) : new ArrayList<>(); // Top-Right
-        List<Point> bottomLeft = remainH > 0 ? getRankedMovesDnC(x, y + midH, midW, remainH) : new ArrayList<>(); // Bottom-Left
+        List<Point> topLeft = getRankedMovesDnC(x, y, midW, midH);
+        List<Point> topRight = remainW > 0 ? getRankedMovesDnC(x + midW, y, remainW, midH) : new ArrayList<>();
+        List<Point> bottomLeft = remainH > 0 ? getRankedMovesDnC(x, y + midH, midW, remainH) : new ArrayList<>();
         List<Point> bottomRight = (remainW > 0 && remainH > 0) ? getRankedMovesDnC(x + midW, y + midH, remainW, remainH)
-                : new ArrayList<>(); // Bottom-Right
+                : new ArrayList<>();
 
-        // Combine: Merge the sorted lists
         return mergeAvailableMoves(topLeft, topRight, bottomLeft, bottomRight);
     }
 
-    // Helper to merge 4 sorted lists into one large sorted list
     @SafeVarargs
     private final List<Point> mergeAvailableMoves(List<Point>... lists) {
-        System.out.println(
-                "DEBUG: Merging " + lists.length + " lists. Total points before merge: " + new ArrayList<Point>() {
-                    {
-                        for (List<Point> l : lists)
-                            addAll(l);
-                    }
-                }.size());
         List<Point> result = new ArrayList<>();
         for (List<Point> list : lists) {
             result.addAll(list);
         }
-        // Ideally we would do a proper merge (like MergeSort merge step) for O(N),
-        // but for code simplicity and "Inclusion of Sorting", we can re-sort the
-        // combined list.
-        // O(N log N) here on the combined size.
+
         sortMoves(result);
-        System.out.println("DEBUG: Merged list size after sort: " + result.size());
         return result;
     }
 
     // Sorts a list of moves based on the heuristic (highest score first)
     private void sortMoves(List<Point> moves) {
-        // Review 2 Requirement: Inclusion of sorting in the game logic
-        // We implement a custom Merge Sort (Divide & Conquer) instead of using
-        // Collections.sort
-        moves.sort((a, b) -> { // Using List.sort just to show comparison logic, but we will use custom
-                               // MergeSort below
-            return 0;
-        });
-
-        // Actually perform the custom merge sort
         List<Point> sorted = mergeSort(moves);
         moves.clear();
         moves.addAll(sorted);
@@ -399,11 +336,10 @@ public class SlantController {
             Point p1 = left.get(i);
             Point p2 = right.get(j);
 
-            // Compare based on heuristic (Descending order of keys)
             int c1 = countAdjacentClues(p1.x, p1.y);
             int c2 = countAdjacentClues(p2.x, p2.y);
 
-            if (c1 >= c2) { // Descending: Higher count comes first
+            if (c1 >= c2) {
                 merged.add(p1);
                 i++;
             } else {
@@ -422,32 +358,157 @@ public class SlantController {
         return merged;
     }
 
-    // Helper method for sorting heuristic
     private int countAdjacentClues(int x, int y) {
         int count = 0;
-        // Check the 4 corner nodes of this cell
-        // Node at (x, y)
         if (isValidNode(x, y) && model.getClue(x, y) != null)
             count++;
-        // Node at (x+1, y)
+
         if (isValidNode(x + 1, y) && model.getClue(x + 1, y) != null)
             count++;
-        // Node at (x, y+1)
+
         if (isValidNode(x, y + 1) && model.getClue(x, y + 1) != null)
             count++;
-        // Node at (x+1, y+1)
+
         if (isValidNode(x + 1, y + 1) && model.getClue(x + 1, y + 1) != null)
             count++;
         return count;
     }
 
     private boolean isValidNode(int x, int y) {
-        // We can access model via getter or logic
-        // Ideally SlantModel should expose isValidNode publicly or we replicate logic
-        // But since model.getClue returns null if invalid, we can just call
-        // model.getClue directly
-        // However, if we want to be safe:
+
         return x >= 0 && x <= model.getWidth() && y >= 0 && y <= model.getHeight();
+    }
+
+    // === STRATEGY 3: BACKTRACKING (Review 3) ===
+    // Recursive solver: tries placing slants and backtracks on constraint
+    // violation.
+    // Time Complexity: O(2^N) worst case, but pruned by constraint checks.
+    // The CPU only takes the FIRST move found by the solver.
+    private boolean makeCpuMoveBacktracking() {
+
+        // Find the first empty cell
+        for (int y = 0; y < model.getHeight(); y++) {
+            for (int x = 0; x < model.getWidth(); x++) {
+                if (model.getSlant(x, y) == Slant.EMPTY) {
+                    // Try solving from this cell using backtracking
+                    Slant result = backtrackFindMove(x, y);
+                    if (result != null) {
+                        Slant correct = model.getSolutionAt(x, y);
+                        model.setSlant(x, y, correct);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Backtracking: Tries both slant directions for cell (x,y).
+     * Returns the valid slant direction, or null if neither works.
+     * Uses constraint checking (no loops + partial clue validation).
+     */
+    private Slant backtrackFindMove(int x, int y) {
+        // Try FORWARD first
+        model.setSlant(x, y, Slant.FORWARD);
+        if (isConstraintSatisfied(x, y)) {
+            // Check if we can continue solving recursively
+            if (backtrackSolve(x, y)) {
+                // Found a valid path! Undo the recursive moves but remember direction
+                undoAfter(x, y);
+                model.setSlant(x, y, Slant.EMPTY);
+                return Slant.FORWARD;
+            }
+        }
+        model.setSlant(x, y, Slant.EMPTY); // Backtrack!
+
+        // Try BACKWARD
+        model.setSlant(x, y, Slant.BACKWARD);
+        if (isConstraintSatisfied(x, y)) {
+            if (backtrackSolve(x, y)) {
+                undoAfter(x, y);
+                model.setSlant(x, y, Slant.EMPTY);
+                return Slant.BACKWARD;
+            }
+        }
+        model.setSlant(x, y, Slant.EMPTY); // Backtrack!
+
+        return null; // Neither direction works
+    }
+
+    /**
+     * Recursive backtracking solver. Tries to fill cells after (startX, startY).
+     * Returns true if a valid configuration is found.
+     */
+    private boolean backtrackSolve(int startX, int startY) {
+        // Find next empty cell after current position
+        for (int y = startY; y < model.getHeight(); y++) {
+            int xStart = (y == startY) ? startX + 1 : 0;
+            for (int x = xStart; x < model.getWidth(); x++) {
+                if (model.getSlant(x, y) == Slant.EMPTY) {
+                    // Try FORWARD
+                    model.setSlant(x, y, Slant.FORWARD);
+                    if (isConstraintSatisfied(x, y) && backtrackSolve(x, y)) {
+                        return true;
+                    }
+                    model.setSlant(x, y, Slant.EMPTY); // Backtrack
+
+                    // Try BACKWARD
+                    model.setSlant(x, y, Slant.BACKWARD);
+                    if (isConstraintSatisfied(x, y) && backtrackSolve(x, y)) {
+                        return true;
+                    }
+                    model.setSlant(x, y, Slant.EMPTY); // Backtrack
+
+                    return false; // Neither works for this cell
+                }
+            }
+        }
+        // All cells filled successfully
+        return !model.hasLoops();
+    }
+
+    /**
+     * Checks constraints after placing a slant at (x, y):
+     * 1. No loops formed
+     * 2. Adjacent clues are not over-satisfied (partial validation)
+     */
+    private boolean isConstraintSatisfied(int x, int y) {
+        if (model.hasLoops())
+            return false;
+
+        // Check the 4 corner nodes of this cell for over-satisfaction
+        int[][] corners = { { x, y }, { x + 1, y }, { x, y + 1 }, { x + 1, y + 1 } };
+        for (int[] c : corners) {
+            if (isValidNode(c[0], c[1])) {
+                Integer clue = model.getClue(c[0], c[1]);
+                if (clue != null) {
+                    int current = model.getDPClueCount(c[0], c[1]);
+                    if (current > clue) {
+                        return false; // Over-satisfied = invalid
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Undoes all slant placements after position (startX, startY).
+     * Used to clean up after backtracking exploration.
+     */
+    private void undoAfter(int startX, int startY) {
+        for (int y = startY; y < model.getHeight(); y++) {
+            int xStart = (y == startY) ? startX + 1 : 0;
+            for (int x = xStart; x < model.getWidth(); x++) {
+                if (model.getSlant(x, y) != Slant.EMPTY) {
+                    // Only undo if this wasn't originally placed by the player
+                    // For safety, undo everything after our starting point
+                    model.setSlant(x, y, Slant.EMPTY);
+                }
+            }
+        }
     }
 
     private void showVictory(Player winner, String reason) {

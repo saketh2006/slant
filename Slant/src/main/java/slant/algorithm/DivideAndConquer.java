@@ -3,14 +3,11 @@ package slant.algorithm;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A utility class providing Divide and Conquer algorithms.
- * Currently supports Merge Sort and Quick Sort.
- */
+
 public class DivideAndConquer {
 
     /**
-     * Sorts the given list using Merge Sort algorithm.
+
      * Time Complexity: O(n log n)
      * Space Complexity: O(n)
      *
@@ -84,21 +81,21 @@ public class DivideAndConquer {
 
     private static <T extends Comparable<T>> int partition(List<T> list, int low, int high) {
         T pivot = list.get(high);
-        int i = (low - 1); // index of smaller element
+        int i = (low - 1); 
 
         for (int j = low; j < high; j++) {
-            // If current element is smaller than or equal to pivot
+            
             if (list.get(j).compareTo(pivot) <= 0) {
                 i++;
 
-                // swap list[i] and list[j]
+                
                 T temp = list.get(i);
                 list.set(i, list.get(j));
                 list.set(j, temp);
             }
         }
 
-        // swap list[i+1] and list[high] (or pivot)
+        
         T temp = list.get(i + 1);
         list.set(i + 1, list.get(high));
         list.set(high, temp);
