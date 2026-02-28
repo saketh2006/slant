@@ -13,11 +13,13 @@ graph TD
         Frame --> View[SlantPanel]
         Frame --> Controller[SlantController]
         Model -.->|Builds Grid & Clues| Frame
+        Model -.->|Init DP Table| Frame
     end
 
     subgraph "Game Loop"
         Input[/User Click/] -->|Notify| Controller
         Controller -->|Update Cell| Model
+        Model -->|DP Update| DPTable[dpClueCount Cache]
         Model -->|Check State| WinLoss{Game Over?}
         
         WinLoss -- No --> ViewRefresh[Refresh View]
@@ -28,10 +30,12 @@ graph TD
         
         subgraph "CPU Logic"
             CPU_AI --> Strategy{Strategy?}
-            Strategy -- Divide & Conquer --> DnC[Recursive Search]
             Strategy -- Greedy --> Greedy[Heuristic Scan]
-            DnC -->|Best Move| Model
+            Strategy -- D&C --> DnC[Recursive Search]
+            Strategy -- Backtracking --> BT["Recursive Solver"]
             Greedy -->|Best Move| Model
+            DnC -->|Best Move| Model
+            BT -->|Best Move| Model
         end
         
         WinLoss -- Yes --> End([End Game / Popup])
@@ -43,31 +47,40 @@ graph TD
 ### A. Initialization (Start)
 *   **Main Entry**: The app starts in `Main.java`.
 *   **Setup**: It creates the `SlantFrame` (Window), which initializes:
-    *   **Model** (`SlantModel`): The brain. It creates the grid, generates a valid solution, but hides it. It then calculates the clues numbers.
-    *   **View** (`SlantPanel`): The visual board. It draws the grid lines and clues based on the Model.
-    *   **Controller** (`SlantController`): The manager. It connects the user's clicks to the game logic.
+    *   **Model** (`SlantModel`): Creates the grid, generates a valid solution, calculates clue numbers, and initializes the **DP table** (`dpClueCount`).
+    *   **View** (`SlantPanel`): Draws the grid with a dark theme, glowing slant lines, and colored clue indicators.
+    *   **Controller** (`SlantController`): Connects clicks to game logic, manages CPU strategies.
 
 ### B. The Game Loop (Playing)
-The game waits for **Events** (User Clicks).
 
 #### Human Turn
 1.  **Click**: You click a cell.
 2.  **Controller Action**: `SlantController.onCellClicked` is triggered.
 3.  **Update Model**: The Controller tells the Model to update that cell (add `/`, `\`, or clear).
-4.  **Refresh View**: The View repaints to show the new line.
-5.  **Check Status**:
-    *   **Win**: If the board is full, correct, and loop-free -> **VICTORY!**
-    *   **Loss**: If the board is full but has errors -> **GAME OVER.**
-    *   **Continue**: If strictly playing turn-based, pass turn to CPU.
+4.  **DP Update**: The Model incrementally updates only the **4 affected corner nodes** in `dpClueCount` (O(1) per move).
+5.  **Refresh View**: The View repaints to show the new line.
+6.  **Check Status**:
+    *   **Win**: Board is full, correct, and loop-free → **VICTORY!**
+    *   **Loss**: Board is full but has errors → **GAME OVER.**
+    *   **Continue**: Pass turn to CPU.
 
 #### CPU Turn (AI)
-1.  **Trigger**: If it's the CPU's turn.
-2.  **Strategy**: The CPU decides a move using **Divide & Conquer** (default) or **Greedy**.
-    *   *Divide & Conquer*: Recursively splits grid to find the best spot.
-    *   *Greedy*: Scans for the cell with the most clues.
-3.  **Execute**: CPU updates the Model.
-4.  **Switch Back**: Turn goes back to the Player.
+1.  **Trigger**: CPU's turn starts after a 1-second delay.
+2.  **Strategy** (selected via difficulty):
+    *   **Greedy** (Review 1): Scans all empty cells, sorts by adjacent clue count, picks the best.
+    *   **Divide & Conquer** (Review 2): Recursively splits grid into 4 quadrants, merges sorted results.
+    *   **Backtracking** (Review 3): Tries both `/` and `\` for each cell, recursively solves forward, backtracks on constraint violation.
+3.  **Constraint Checks**: Uses `hasLoops()` (Union-Find) and `getDPClueCount()` (DP cache) for validation.
+4.  **Fallback**: If strategy fails, falls back to Greedy → then random cell.
+5.  **Switch Back**: Turn goes back to the Player.
 
-### C. End Game
+### C. Dynamic Programming (Optimization Layer)
+*   **Not a CPU strategy** — works silently in the Model for all strategies.
+*   `dpClueCount[][]` caches line counts at each node intersection.
+*   Updated incrementally on every `setSlant()` call.
+*   Used by Backtracking's `isConstraintSatisfied()` for fast constraint checks.
+*   **Performance**: O(N) → O(1) per move validation.
+
+### D. End Game
 *   A popup message shows "Victory" or "Game Over".
-*   You can start a **New Game** from the menu, which resets the entire process (Step 1).
+*   You can start a **New Game** from the menu, which resets the entire process.
